@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+{% block title %}Recurring Expenses · Expense Tracker{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+  <!-- Header -->
+  <div>
+    <h1 class="text-3xl font-bold tracking-tight">📆 Recurring Expenses</h1>
+    <p class="text-sm text-slate-400 mt-1">
+      Manage fixed monthly commitments like Rent, Netflix, or Utilities. They are automatically added to your expenses each month.
+    </p>
+  </div>
+
+  {% set total_recurring = recurring_expenses|map(attribute='amount')|sum %}
+
+  <!-- KPI Summary Banner -->
+  <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+    <div class="rounded-2xl border border-slate-800 bg-slate-900/90 p-4 flex items-center justify-between">
+      <div>
+        <span class="text-xs text-slate-400 font-medium uppercase tracking-wider">Total Monthly Commitments</span>
+        <div id="totalRecurringSpend" class="text-2xl font-bold text-white mt-1">₹{{ '%.2f'|format(total_recurring) }}</div>
+      </div>
+      <div class="w-10 h-10 rounded-xl bg-purple-500/10 text-purple-400 flex items-center justify-center text-xl">
+        🔄
+      </div>
+    </div>
+    <div class="rounded-2xl border border-slate-800 bg-slate-900/90 p-4 flex items-center justify-between">
+      <div>
+        <span class="text-xs text-slate-400 font-medium uppercase tracking-wider">Active Subscriptions</span>
+        <div id="recurringCount" class="text-2xl font-bold text-white mt-1">{{ recurring_expenses|length }}</div>
+      </div>
+      <div class="w-10 h-10 rounded-xl bg-sky-500/10 text-sky-400 flex items-center justify-center text-xl">
+        📋
+      </div>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <!-- Add form -->
+    <section class="rounded-2xl border border-slate-800 bg-slate-900/90 p-5 h-fit">
+      <h2 class="text-base font-semibold mb-1 flex items-center gap-2">
+        <span class="text-brand">➕</span> Add Recurring Bill
+      </h2>
+      <p class="text-xs text-slate-400 mb-4">Set up an expense to repeat monthly.</p>
+
+      <form method="post" action="{{ url_for('recurring') }}" class="space-y-3.5">
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1">Expense Name <span class="text-rose-400">*</span></label>
+          <input
+            name="name"
+            type="text"
+            required
+            placeholder="e.g., Netflix, House Rent, Gym, Internet"
+            class="w-full rounded-xl bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-brand" />
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1">Amount (₹) <span class="text-rose-400">*</span></label>
+            <input
+              name="amount"
+              type="number"
+              step="0.01"
+              min="0.01"
+              required
+              placeholder="499.00"
+              class="w-full rounded-xl bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-brand" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1">Day of Month (1-28)</label>
+            <input
+              name="day_of_month"
+              type="number"
+              min="1"
+              max="28"
+              value="1"
+              required
+              class="w-full rounded-xl bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-brand" />
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1">Category <span class="text-rose-400">*</span></label>
+          <select
+            name="category"
+            required
+            class="w-full rounded-xl bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-brand">
+            {% for c in categories %}
+            <option value="{{ c }}">{{ c }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <button
+          type="submit"
+          class="w-full rounded-xl bg-brand hover:bg-sky-400 text-slate-950 font-semibold px-4 py-2.5 text-sm transition-all transform active:scale-95 shadow-lg shadow-brand/10">
+          Save Recurring Expense
+        </button>
+      </form>
+    </section>
+
+    <!-- Recurring List Table -->
+    <section class="lg:col-span-2 rounded-2xl border border-slate-800 bg-slate-900/90 overflow-hidden">
+      <div class="px-5 py-4 border-b border-slate-800 flex items-center justify-between">
+        <h2 class="text-base font-semibold">Configured Monthly Commitments</h2>
+        <span class="text-xs text-slate-400">Repeats automatically</span>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="min-w-full text-sm">
+          <thead class="text-slate-300 bg-slate-800/60 select-none">
+            <tr>
+              <th class="text-left px-4 py-3 font-semibold">Name</th>
+              <th class="text-left px-4 py-3 font-semibold">Category</th>
+              <th class="text-center px-4 py-3 font-semibold">Due Day</th>
+              <th class="text-right px-4 py-3 font-semibold">Amount</th>
+              <th class="px-4 py-3 text-right font-semibold">Action</th>
+            </tr>
+          </thead>
+          <tbody id="recurringTableBody" class="divide-y divide-slate-800">
+            {% for r in recurring_expenses %}
+            <tr id="recurring-row-{{ r.id }}" class="hover:bg-slate-800/40 transition-colors">
+              <td class="px-4 py-3 font-medium text-slate-100 flex items-center gap-2">
+                <span>🗓️</span>
+                <span>{{ r.name }}</span>
+              </td>
+              <td class="px-4 py-3">
+                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-800 text-slate-300 border border-slate-700">
+                  {{ r.category }}
+                </span>
+              </td>
+              <td class="px-4 py-3 text-center">
+                <span class="inline-block px-2 py-0.5 rounded-lg bg-slate-800/80 font-mono text-xs text-sky-400 border border-slate-700">
+                  Day {{ r.day_of_month }}
+                </span>
+              </td>
+              <td class="px-4 py-3 text-right font-semibold text-white whitespace-nowrap">
+                ₹{{ '%.2f'|format(r.amount) }}
+              </td>
+              <td class="px-4 py-3 text-right whitespace-nowrap">
+                <button
+                  type="button"
+                  onclick="deleteRecurringAsync({{ r.id }}, '{{ r.name|escape }}', {{ r.amount }})"
+                  class="px-2.5 py-1 rounded-lg text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 border border-rose-500/30 transition-colors">
+                  Remove
+                </button>
+              </td>
+            </tr>
+            {% else %}
+            <tr id="emptyRecurringRow">
+              <td colspan="5" class="px-4 py-10 text-center text-slate-400">
+                <div class="text-2xl mb-1">📆</div>
+                <p class="text-sm font-medium text-slate-300">No recurring expenses configured</p>
+                <p class="text-xs text-slate-500">Add regular payments like Rent, Netflix, or Broadband above.</p>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script>
+  let currentTotal = {{ total_recurring }};
+  let currentCount = {{ recurring_expenses|length }};
+
+  async function deleteRecurringAsync(recId, name, amount) {
+    if (!confirm(`Remove recurring expense "${name}"?`)) return;
+
+    try {
+      const res = await fetch(`/recurring/delete/${recId}`, {
+        method: 'POST',
+        headers: { 'Accept': 'application/json' }
+      });
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || 'Failed to remove');
+      }
+
+      showToast(`Removed "${name}" from recurring expenses`, 'info');
+
+      const row = document.getElementById(`recurring-row-${recId}`);
+      if (row) {
+        row.classList.add('opacity-0', 'scale-95');
+        setTimeout(() => {
+          row.remove();
+          currentTotal = Math.max(0, currentTotal - amount);
+          currentCount = Math.max(0, currentCount - 1);
+          document.getElementById('totalRecurringSpend').textContent = formatCurrency(currentTotal);
+          document.getElementById('recurringCount').textContent = currentCount;
+
+          if (currentCount === 0) {
+            document.getElementById('recurringTableBody').innerHTML = `
+              <tr id="emptyRecurringRow">
+                <td colspan="5" class="px-4 py-10 text-center text-slate-400">
+                  <div class="text-2xl mb-1">📆</div>
+                  <p class="text-sm font-medium text-slate-300">No recurring expenses configured</p>
+                  <p class="text-xs text-slate-500">Add regular payments like Rent, Netflix, or Broadband above.</p>
+                </td>
+              </tr>
+            `;
+          }
+        }, 200);
+      }
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  }
+</script>
+{% endblock %}

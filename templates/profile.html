@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Profile · Expense Tracker{% endblock %}
+
+{% block content %}
+  <h1 class="text-3xl font-semibold mb-2">👤 Profile</h1>
+  <p class="text-slate-400 mb-6">Your account details and activity summary.</p>
+
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+    <!-- Account card -->
+    <section class="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+      <div class="flex items-center gap-3 mb-4">
+        <div class="w-14 h-14 rounded-full bg-brand/20 border border-brand/30 flex items-center justify-center text-2xl font-bold text-brand">
+          {{ current_user.username[0]|upper }}
+        </div>
+        <div>
+          <div class="font-semibold text-lg">{{ current_user.username }}</div>
+          {% if current_user.email %}
+          <div class="text-xs text-slate-300 font-mono">{{ current_user.email }}</div>
+          {% endif %}
+          <div class="text-xs text-slate-400">Member since {{ current_user.created_at.strftime('%d %b %Y') if current_user.created_at else '—' }}</div>
+        </div>
+      </div>
+
+      <div class="space-y-2 text-sm">
+        <div class="flex justify-between rounded-xl bg-slate-800 border border-slate-700 px-3 py-2">
+          <span class="text-slate-400">Total Expenses Logged</span>
+          <span class="font-semibold">{{ total_expenses_count }}</span>
+        </div>
+        <div class="flex justify-between rounded-xl bg-slate-800 border border-slate-700 px-3 py-2">
+          <span class="text-slate-400">Total Spent (all time)</span>
+          <span class="font-semibold">₹{{ '%.2f'|format(total_spent) }}</span>
+        </div>
+        <div class="flex justify-between rounded-xl bg-slate-800 border border-slate-700 px-3 py-2">
+          <span class="text-slate-400">Recurring Expenses</span>
+          <span class="font-semibold">{{ recurring_count }}</span>
+        </div>
+        <div class="flex justify-between rounded-xl bg-slate-800 border border-slate-700 px-3 py-2">
+          <span class="text-slate-400">Savings Goals</span>
+          <span class="font-semibold">{{ goals_count }}</span>
+        </div>
+        <div class="flex justify-between rounded-xl bg-slate-800 border border-slate-700 px-3 py-2">
+          <span class="text-slate-400">This Month's Budget</span>
+          <span class="font-semibold">{% if current_budget %}₹{{ '%.2f'|format(current_budget) }}{% else %}Not set{% endif %}</span>
+        </div>
+      </div>
+
+      <div class="mt-4 flex flex-wrap gap-2 text-xs">
+        <a href="{{ url_for('budget') }}" class="rounded-lg bg-slate-800 hover:bg-slate-700 px-3 py-1.5 border border-slate-700">Manage Budget</a>
+        <a href="{{ url_for('recurring') }}" class="rounded-lg bg-slate-800 hover:bg-slate-700 px-3 py-1.5 border border-slate-700">Recurring</a>
+        <a href="{{ url_for('savings') }}" class="rounded-lg bg-slate-800 hover:bg-slate-700 px-3 py-1.5 border border-slate-700">Savings</a>
+      </div>
+    </section>
+
+    <!-- Change password -->
+    <section class="lg:col-span-2 rounded-2xl border border-slate-800 bg-slate-900 p-4">
+      <h2 class="text-lg font-semibold mb-3">Change Password</h2>
+      <form method="post" action="{{ url_for('profile') }}" class="space-y-3 max-w-md">
+        <label class="block text-sm">
+          <span class="mb-1 block text-slate-300">Current Password</span>
+          <input name="current_password" type="password" required
+            class="w-full rounded-xl bg-slate-800 border border-slate-700 px-3 py-2 text-slate-100" />
+        </label>
+        <label class="block text-sm">
+          <span class="mb-1 block text-slate-300">New Password</span>
+          <input name="new_password" type="password" required
+            class="w-full rounded-xl bg-slate-800 border border-slate-700 px-3 py-2 text-slate-100" />
+        </label>
+        <label class="block text-sm">
+          <span class="mb-1 block text-slate-300">Confirm New Password</span>
+          <input name="confirm_password" type="password" required
+            class="w-full rounded-xl bg-slate-800 border border-slate-700 px-3 py-2 text-slate-100" />
+        </label>
+        <button type="submit"
+          class="rounded-xl bg-brand/20 hover:bg-brand/30 text-brand px-4 py-2 border border-brand/30">
+          Update Password
+        </button>
+      </form>
+    </section>
+  </div>
+{% endblock %}

@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+
+{% block title %}Log In · Expense Tracker{% endblock %}
+
+{% block content %}
+<div class="max-w-md mx-auto mt-6">
+  <section class="rounded-2xl border border-slate-800 bg-slate-900/95 p-6 sm:p-8 shadow-xl relative overflow-hidden">
+    <!-- Header -->
+    <div class="mb-6 text-center">
+      <div class="w-12 h-12 rounded-2xl bg-brand/10 border border-brand/20 text-brand flex items-center justify-center text-xl mx-auto mb-3">
+        🔐
+      </div>
+      <h1 class="text-2xl font-bold tracking-tight text-white">Welcome back</h1>
+      <p class="text-slate-400 text-xs mt-1">Enter your email or username to access your dashboard.</p>
+    </div>
+
+    <form method="post" action="{{ url_for('login') }}" class="space-y-4">
+      <div>
+        <label class="block text-xs font-medium text-slate-300 mb-1.5">Email or Username</label>
+        <div class="relative">
+          <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400 text-sm">👤</span>
+          <input
+            name="login_id"
+            type="text"
+            required
+            autofocus
+            placeholder="name@example.com or username"
+            class="w-full rounded-xl bg-slate-800 border border-slate-700 pl-9 pr-3 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-brand transition-colors" />
+        </div>
+      </div>
+
+      <div>
+        <div class="flex items-center justify-between mb-1.5">
+          <label class="block text-xs font-medium text-slate-300">Password</label>
+          <a href="{{ url_for('forgot_password') }}" class="text-xs text-brand hover:underline">Forgot password?</a>
+        </div>
+        <div class="relative">
+          <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400 text-sm">🔒</span>
+          <input
+            id="loginPassword"
+            name="password"
+            type="password"
+            required
+            placeholder="••••••••"
+            class="w-full rounded-xl bg-slate-800 border border-slate-700 pl-9 pr-10 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-brand transition-colors" />
+          <button
+            type="button"
+            onclick="togglePasswordVisibility('loginPassword', 'eyeIconLogin')"
+            class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-200 text-sm">
+            <span id="eyeIconLogin">👁️</span>
+          </button>
+        </div>
+      </div>
+
+      <button
+        type="submit"
+        class="w-full rounded-xl bg-brand hover:bg-sky-400 text-slate-950 font-bold px-4 py-2.5 text-sm transition-all transform active:scale-95 shadow-lg shadow-brand/20 mt-2">
+        Log In
+      </button>
+    </form>
+
+    <div class="mt-6 pt-5 border-t border-slate-800/80 text-center text-xs text-slate-400">
+      Don't have an account yet?
+      <a href="{{ url_for('signup') }}" class="text-brand font-semibold hover:underline ml-1">Sign up for free</a>
+    </div>
+  </section>
+</div>
+
+<script>
+  function togglePasswordVisibility(inputId, iconId) {
+    const input = document.getElementById(inputId);
+    const icon = document.getElementById(iconId);
+    if (!input) return;
+    if (input.type === 'password') {
+      input.type = 'text';
+      if (icon) icon.textContent = '🙈';
+    } else {
+      input.type = 'password';
+      if (icon) icon.textContent = '👁️';
+    }
+  }
+</script>
+{% endblock %}

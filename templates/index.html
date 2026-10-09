@@ -1,0 +1,1281 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard · Expense Tracker{% endblock %}
+
+{% block head_extra %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  <!-- Top Page Header & Quick Action -->
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div>
+      <h1 class="text-3xl font-bold tracking-tight">Dashboard</h1>
+      <p class="text-sm text-slate-400 mt-1">Track spending, analyze patterns, and manage your budget in real time.</p>
+    </div>
+    <div class="flex items-center gap-3">
+      <button
+        id="openAddExpenseModalBtn"
+        type="button"
+        onclick="openAddModal()"
+        class="inline-flex items-center gap-2 rounded-xl bg-brand hover:bg-sky-400 text-slate-950 font-semibold px-4 py-2.5 shadow-lg shadow-brand/20 transition-all transform active:scale-95 text-sm">
+        <span class="text-lg leading-none">+</span>
+        <span>Add Expense</span>
+        <span class="hidden md:inline text-[11px] font-mono bg-slate-950/20 px-1.5 py-0.5 rounded ml-1">N</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- KPI Summary Cards Grid -->
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    <!-- Card 1: Total Spend -->
+    <div class="rounded-2xl border border-slate-800 bg-slate-900/90 p-4 relative overflow-hidden transition-all hover:border-slate-700">
+      <div class="flex items-center justify-between text-slate-400 text-xs font-medium mb-2">
+        <span>Total Spending</span>
+        <span class="w-7 h-7 rounded-lg bg-sky-500/10 text-sky-400 flex items-center justify-center text-sm">💳</span>
+      </div>
+      <div id="kpiTotalSpend" class="text-2xl font-bold tracking-tight text-white mb-1">
+        ₹{{ '%.2f'|format(total) }}
+      </div>
+      <div class="flex items-center gap-1.5 text-xs text-slate-400">
+        <span id="kpiExpenseCount" class="font-medium text-slate-300">{{ count if count is defined else expenses|length }}</span>
+        <span>recorded expenses</span>
+      </div>
+      <div class="absolute -right-6 -bottom-6 w-20 h-20 bg-sky-500/5 rounded-full blur-xl pointer-events-none"></div>
+    </div>
+
+    <!-- Card 2: Monthly Budget Status -->
+    <div class="rounded-2xl border border-slate-800 bg-slate-900/90 p-4 relative overflow-hidden transition-all hover:border-slate-700">
+      <div class="flex items-center justify-between text-slate-400 text-xs font-medium mb-2">
+        <span>Monthly Budget</span>
+        <a href="{{ url_for('budget') }}" class="text-xs text-brand hover:underline font-normal">Manage →</a>
+      </div>
+      <div class="flex items-baseline justify-between mb-1">
+        <span id="kpiBudgetSpent" class="text-2xl font-bold tracking-tight text-white">₹{{ '%.2f'|format(month_spent) }}</span>
+        <span id="kpiBudgetLimit" class="text-xs text-slate-400">/ ₹{{ '%.2f'|format(budget_amount) }}</span>
+      </div>
+      <div class="w-full h-2 rounded-full bg-slate-800 overflow-hidden mb-1.5">
+        <div id="kpiBudgetBar"
+             class="h-full rounded-full transition-all duration-500 {% if budget_status == 'exceeded' %}bg-rose-500{% elif budget_status == 'warning' %}bg-amber-400{% else %}bg-brand{% endif %}"
+             style="width: {{ [budget_percent, 100]|min }}%;"></div>
+      </div>
+      <div class="flex items-center justify-between text-xs">
+        <span id="kpiBudgetPercent" class="text-slate-400">{{ budget_percent }}% used</span>
+        <span id="kpiBudgetRemaining" class="font-medium {% if budget_remaining < 0 %}text-rose-400{% else %}text-emerald-400{% endif %}">
+          {% if budget_remaining < 0 %}Over ₹{{ '%.2f'|format(budget_remaining|abs) }}{% else %}₹{{ '%.2f'|format(budget_remaining) }} left{% endif %}
+        </span>
+      </div>
+    </div>
+
+    <!-- Card 3: Top Category -->
+    <div class="rounded-2xl border border-slate-800 bg-slate-900/90 p-4 relative overflow-hidden transition-all hover:border-slate-700">
+      <div class="flex items-center justify-between text-slate-400 text-xs font-medium mb-2">
+        <span>Top Category</span>
+        <span class="w-7 h-7 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center text-sm">🏆</span>
+      </div>
+      <div id="kpiTopCategory" class="text-2xl font-bold tracking-tight text-white mb-1 truncate">
+        {{ top_category if top_category is defined else 'None' }}
+      </div>
+      <div class="flex items-center gap-1.5 text-xs text-slate-400">
+        <span id="kpiTopCategoryAmount" class="font-medium text-amber-300">
+          {% if top_category_amount is defined and top_category_amount > 0 %}₹{{ '%.2f'|format(top_category_amount) }}{% else %}₹0.00{% endif %}
+        </span>
+        <span>in selected range</span>
+      </div>
+      <div class="absolute -right-6 -bottom-6 w-20 h-20 bg-amber-500/5 rounded-full blur-xl pointer-events-none"></div>
+    </div>
+
+    <!-- Card 4: Daily Average -->
+    <div class="rounded-2xl border border-slate-800 bg-slate-900/90 p-4 relative overflow-hidden transition-all hover:border-slate-700">
+      <div class="flex items-center justify-between text-slate-400 text-xs font-medium mb-2">
+        <span>Daily Average</span>
+        <span class="w-7 h-7 rounded-lg bg-purple-500/10 text-purple-400 flex items-center justify-center text-sm">📅</span>
+      </div>
+      <div id="kpiDailyAvg" class="text-2xl font-bold tracking-tight text-white mb-1">
+        ₹{{ '%.2f'|format(avg_per_day if avg_per_day is defined else 0.0) }}
+      </div>
+      <div class="text-xs text-slate-400">
+        <span>Daily burn rate</span>
+      </div>
+      <div class="absolute -right-6 -bottom-6 w-20 h-20 bg-purple-500/5 rounded-full blur-xl pointer-events-none"></div>
+    </div>
+  </div>
+
+  <!-- Interactive Search & Filter Toolbar -->
+  <section class="rounded-2xl border border-slate-800 bg-slate-900/90 p-4 space-y-3">
+    <!-- Preset Date Range Chips -->
+    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
+      <div class="flex items-center gap-1.5 flex-wrap text-xs">
+        <span class="text-slate-400 mr-1 font-medium">Presets:</span>
+        <button type="button" onclick="applyPreset('all')" class="preset-btn px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors border border-slate-700 active-preset" data-preset="all">All Time</button>
+        <button type="button" onclick="applyPreset('today')" class="preset-btn px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors border border-slate-700" data-preset="today">Today</button>
+        <button type="button" onclick="applyPreset('this_week')" class="preset-btn px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors border border-slate-700" data-preset="this_week">This Week</button>
+        <button type="button" onclick="applyPreset('this_month')" class="preset-btn px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors border border-slate-700" data-preset="this_month">This Month</button>
+        <button type="button" onclick="applyPreset('last_30')" class="preset-btn px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors border border-slate-700" data-preset="last_30">Last 30 Days</button>
+        <button type="button" onclick="applyPreset('this_year')" class="preset-btn px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors border border-slate-700" data-preset="this_year">This Year</button>
+      </div>
+
+      <!-- Export Links -->
+      <div class="flex items-center gap-3 text-xs">
+        <a id="exportCsvBtn" href="{{ url_for('export_csv') }}" class="text-slate-400 hover:text-brand flex items-center gap-1 transition-colors">
+          <span>📊</span> CSV Export
+        </a>
+        <span>·</span>
+        <a id="exportPdfBtn" href="{{ url_for('export_pdf') }}" class="text-slate-400 hover:text-brand flex items-center gap-1 transition-colors">
+          <span>📄</span> PDF Report
+        </a>
+      </div>
+    </div>
+
+    <!-- Filter Inputs Row -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-12 gap-3 items-center">
+      <!-- Live Search Box -->
+      <div class="md:col-span-4 relative">
+        <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400 text-sm">🔍</span>
+        <input
+          id="liveSearchInput"
+          type="text"
+          placeholder="Instant search description or category... (/)"
+          value="{{ search_str or '' }}"
+          class="w-full rounded-xl bg-slate-800 border border-slate-700 pl-9 pr-8 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-brand transition-colors" />
+        <button id="clearSearchBtn" type="button" onclick="clearSearch()" class="hidden absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-white">&times;</button>
+      </div>
+
+      <!-- Category Filter -->
+      <div class="md:col-span-3">
+        <select
+          id="categoryFilter"
+          onchange="onFilterChange()"
+          class="w-full rounded-xl bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-brand transition-colors">
+          <option value="">All Categories</option>
+          {% for c in categories %}
+          <option value="{{ c }}" {% if c == category_str %}selected{% endif %}>{{ c }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- Start Date -->
+      <div class="md:col-span-2">
+        <input
+          id="startDateInput"
+          type="date"
+          value="{{ start_str or '' }}"
+          onchange="onFilterChange()"
+          class="w-full rounded-xl bg-slate-800 border border-slate-700 px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-brand transition-colors"
+          title="Start Date" />
+      </div>
+
+      <!-- End Date -->
+      <div class="md:col-span-2">
+        <input
+          id="endDateInput"
+          type="date"
+          value="{{ end_str or '' }}"
+          onchange="onFilterChange()"
+          class="w-full rounded-xl bg-slate-800 border border-slate-700 px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-brand transition-colors"
+          title="End Date" />
+      </div>
+
+      <!-- Reset Filter Button -->
+      <div class="md:col-span-1 flex justify-end">
+        <button
+          type="button"
+          onclick="resetFilters()"
+          title="Reset all filters"
+          class="w-full rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-2 border border-slate-700 text-xs font-medium transition-colors text-center">
+          Reset
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Interactive Charts Section -->
+  <section class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+    <!-- Category Chart Card -->
+    <div class="rounded-2xl border border-slate-800 bg-slate-900/90 p-4 transition-all hover:border-slate-700">
+      <div class="flex items-center justify-between mb-3">
+        <div>
+          <h3 class="font-semibold text-sm">Expenses by Category</h3>
+          <p class="text-xs text-slate-400">Click a slice to filter expenses table</p>
+        </div>
+        <div class="flex items-center gap-1 bg-slate-800/80 p-1 rounded-xl border border-slate-700 text-xs">
+          <button type="button" onclick="setCategoryChartType('doughnut')" class="chart-type-btn px-2 py-0.5 rounded-lg active-chart-type bg-brand text-slate-950 font-medium" data-chart="doughnut">Donut</button>
+          <button type="button" onclick="setCategoryChartType('pie')" class="chart-type-btn px-2 py-0.5 rounded-lg text-slate-300 hover:text-white" data-chart="pie">Pie</button>
+          <button type="button" onclick="setCategoryChartType('polarArea')" class="chart-type-btn px-2 py-0.5 rounded-lg text-slate-300 hover:text-white" data-chart="polarArea">Polar</button>
+        </div>
+      </div>
+      <div class="relative h-64 flex items-center justify-center overflow-hidden">
+        <canvas id="catChart"></canvas>
+        <div id="catChartEmpty" class="hidden absolute inset-0 flex-col items-center justify-center text-center p-4 pointer-events-none z-10">
+          <div class="w-10 h-10 rounded-full bg-slate-800/80 border border-slate-700/60 flex items-center justify-center text-lg mb-2 text-slate-400">
+            📊
+          </div>
+          <p class="text-xs font-semibold text-slate-300">No category data for current filter</p>
+          <p class="text-[11px] text-slate-500 mt-1 max-w-xs">Try selecting a different date range or category</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Spending Trend Chart Card -->
+    <div class="rounded-2xl border border-slate-800 bg-slate-900/90 p-4 transition-all hover:border-slate-700">
+      <div class="flex items-center justify-between mb-3">
+        <div>
+          <h3 class="font-semibold text-sm">Spending Trend</h3>
+          <p class="text-xs text-slate-400">Daily expenses over time</p>
+        </div>
+        <div class="flex items-center gap-1 bg-slate-800/80 p-1 rounded-xl border border-slate-700 text-xs">
+          <button type="button" onclick="setTrendChartType('bar')" class="trend-type-btn px-2 py-0.5 rounded-lg active-trend-type bg-brand text-slate-950 font-medium" data-trend="bar">Bar</button>
+          <button type="button" onclick="setTrendChartType('line')" class="trend-type-btn px-2 py-0.5 rounded-lg text-slate-300 hover:text-white" data-trend="line">Line</button>
+        </div>
+      </div>
+      <div class="relative h-64 flex items-center justify-center overflow-hidden">
+        <canvas id="dayChart"></canvas>
+        <div id="dayChartEmpty" class="hidden absolute inset-0 flex-col items-center justify-center text-center p-4 pointer-events-none z-10">
+          <div class="w-10 h-10 rounded-full bg-slate-800/80 border border-slate-700/60 flex items-center justify-center text-lg mb-2 text-slate-400">
+            📈
+          </div>
+          <p class="text-xs font-semibold text-slate-300">No time trend data for current filter</p>
+          <p class="text-[11px] text-slate-500 mt-1 max-w-xs">No expenses recorded for the selected time period</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Interactive Expenses Table Section -->
+  <section class="rounded-2xl border border-slate-800 bg-slate-900/90 overflow-hidden">
+    <div class="px-4 py-3.5 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-2">
+        <h2 class="text-base font-semibold">Expense Records</h2>
+        <span id="tableRecordCountBadge" class="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
+          {{ expenses|length }} items
+        </span>
+      </div>
+
+      <!-- Table page size selector -->
+      <div class="flex items-center gap-2 text-xs text-slate-400">
+        <span>Show</span>
+        <select id="pageSizeSelect" onchange="onPageSizeChange()" class="rounded-lg bg-slate-800 border border-slate-700 px-2 py-1 text-slate-200">
+          <option value="10">10</option>
+          <option value="25">25</option>
+          <option value="50">50</option>
+          <option value="all">All</option>
+        </select>
+        <span>entries</span>
+      </div>
+    </div>
+
+    <!-- Table content -->
+    <div class="overflow-x-auto">
+      <table class="min-w-full text-sm">
+        <thead class="text-slate-300 bg-slate-800/60 select-none">
+          <tr>
+            <th onclick="toggleSort('date')" class="cursor-pointer hover:text-brand text-left px-4 py-3 font-semibold transition-colors">
+              Date <span id="sortIcon-date" class="text-xs font-mono ml-0.5 opacity-80">▼</span>
+            </th>
+            <th onclick="toggleSort('description')" class="cursor-pointer hover:text-brand text-left px-4 py-3 font-semibold transition-colors">
+              Description <span id="sortIcon-description" class="text-xs font-mono ml-0.5 opacity-40">↕</span>
+            </th>
+            <th onclick="toggleSort('category')" class="cursor-pointer hover:text-brand text-left px-4 py-3 font-semibold transition-colors">
+              Category <span id="sortIcon-category" class="text-xs font-mono ml-0.5 opacity-40">↕</span>
+            </th>
+            <th onclick="toggleSort('amount')" class="cursor-pointer hover:text-brand text-right px-4 py-3 font-semibold transition-colors">
+              Amount <span id="sortIcon-amount" class="text-xs font-mono ml-0.5 opacity-40">↕</span>
+            </th>
+            <th class="px-4 py-3 text-right font-semibold">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="expensesTableBody" class="divide-y divide-slate-800">
+          <!-- Rows will be injected by JavaScript for dynamic sorting/filtering/pagination -->
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Empty State -->
+    <div id="tableEmptyState" class="hidden p-8 text-center">
+      <div class="text-3xl mb-2">🔍</div>
+      <p class="text-sm text-slate-300 font-medium mb-1">No matching expenses found</p>
+      <p class="text-xs text-slate-500 mb-4">Try adjusting your search query, date filter, or add a new expense.</p>
+      <button type="button" onclick="openAddModal()" class="text-xs px-3 py-1.5 rounded-lg bg-brand/20 text-brand border border-brand/30 hover:bg-brand/30">
+        + Add New Expense
+      </button>
+    </div>
+
+    <!-- Pagination Footer -->
+    <div id="tablePagination" class="px-4 py-3 border-t border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-400">
+      <div id="paginationInfo">Showing 1 to 10 of 10 entries</div>
+      <div id="paginationButtons" class="flex items-center gap-1">
+        <!-- Buttons injected by JavaScript -->
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<!-- ---------------- ADD EXPENSE MODAL ---------------- -->
+<div id="addExpenseModal" class="app-modal fixed inset-0 z-50 hidden bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
+  <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl relative animate-in fade-in zoom-in duration-150">
+    <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-800">
+      <h3 class="text-lg font-bold flex items-center gap-2">
+        <span class="text-brand">➕</span> Add New Expense
+      </h3>
+      <button type="button" onclick="closeAddModal()" class="text-slate-400 hover:text-white text-xl leading-none">&times;</button>
+    </div>
+
+    <form id="addExpenseForm" onsubmit="handleAddSubmit(event)" class="space-y-3.5">
+      <div>
+        <label class="block text-xs font-medium text-slate-300 mb-1">Description <span class="text-rose-400">*</span></label>
+        <input
+          id="addDescription"
+          name="description"
+          type="text"
+          required
+          placeholder="e.g., Grocery Store, Coffee, Uber"
+          class="w-full rounded-xl bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-brand" />
+      </div>
+
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1">Amount (₹) <span class="text-rose-400">*</span></label>
+          <input
+            id="addAmount"
+            name="amount"
+            type="number"
+            step="0.01"
+            min="0.01"
+            required
+            placeholder="250.00"
+            class="w-full rounded-xl bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-brand" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1">Date</label>
+          <input
+            id="addDate"
+            name="date"
+            type="date"
+            value="{{ today }}"
+            class="w-full rounded-xl bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-brand" />
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-xs font-medium text-slate-300 mb-1">Category <span class="text-rose-400">*</span></label>
+        <select
+          id="addCategory"
+          name="category"
+          required
+          class="w-full rounded-xl bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-brand">
+          {% for c in categories %}
+          <option value="{{ c }}">{{ c }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="pt-2 flex items-center justify-end gap-2">
+        <button
+          type="button"
+          onclick="closeAddModal()"
+          class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-sm transition-colors">
+          Cancel
+        </button>
+        <button
+          id="addSubmitBtn"
+          type="submit"
+          class="px-4 py-2 rounded-xl bg-brand hover:bg-sky-400 text-slate-950 font-semibold text-sm transition-all transform active:scale-95">
+          Save Expense
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ---------------- EDIT EXPENSE MODAL ---------------- -->
+<div id="editExpenseModal" class="app-modal fixed inset-0 z-50 hidden bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
+  <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl relative animate-in fade-in zoom-in duration-150">
+    <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-800">
+      <h3 class="text-lg font-bold flex items-center gap-2">
+        <span class="text-brand">✏️</span> Edit Expense
+      </h3>
+      <button type="button" onclick="closeEditModal()" class="text-slate-400 hover:text-white text-xl leading-none">&times;</button>
+    </div>
+
+    <form id="editExpenseForm" onsubmit="handleEditSubmit(event)" class="space-y-3.5">
+      <input id="editExpenseId" type="hidden" />
+
+      <div>
+        <label class="block text-xs font-medium text-slate-300 mb-1">Description <span class="text-rose-400">*</span></label>
+        <input
+          id="editDescription"
+          name="description"
+          type="text"
+          required
+          class="w-full rounded-xl bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-brand" />
+      </div>
+
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1">Amount (₹) <span class="text-rose-400">*</span></label>
+          <input
+            id="editAmount"
+            name="amount"
+            type="number"
+            step="0.01"
+            min="0.01"
+            required
+            class="w-full rounded-xl bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-brand" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1">Date</label>
+          <input
+            id="editDate"
+            name="date"
+            type="date"
+            class="w-full rounded-xl bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-brand" />
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-xs font-medium text-slate-300 mb-1">Category <span class="text-rose-400">*</span></label>
+        <select
+          id="editCategory"
+          name="category"
+          required
+          class="w-full rounded-xl bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-brand">
+          {% for c in categories %}
+          <option value="{{ c }}">{{ c }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="pt-2 flex items-center justify-end gap-2">
+        <button
+          type="button"
+          onclick="closeEditModal()"
+          class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-sm transition-colors">
+          Cancel
+        </button>
+        <button
+          id="editSubmitBtn"
+          type="submit"
+          class="px-4 py-2 rounded-xl bg-brand hover:bg-sky-400 text-slate-950 font-semibold text-sm transition-all transform active:scale-95">
+          Update Expense
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ---------------- DELETE CONFIRMATION MODAL ---------------- -->
+<div id="deleteConfirmModal" class="app-modal fixed inset-0 z-50 hidden bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
+  <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-sm p-6 shadow-2xl relative text-center">
+    <div class="w-12 h-12 rounded-full bg-rose-500/10 border border-rose-500/20 text-rose-400 flex items-center justify-center text-xl mx-auto mb-3">
+      🗑️
+    </div>
+    <h3 class="text-base font-bold text-white mb-1">Delete this expense?</h3>
+    <p id="deleteModalDesc" class="text-xs text-slate-400 mb-5">This action cannot be undone.</p>
+
+    <div class="flex items-center justify-center gap-2">
+      <button
+        type="button"
+        onclick="closeDeleteModal()"
+        class="flex-1 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-medium transition-colors">
+        Cancel
+      </button>
+      <button
+        id="confirmDeleteBtn"
+        type="button"
+        class="flex-1 px-3 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-medium text-xs transition-colors">
+        Delete
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Initial data loaded from template
+  let allExpenses = [
+    {% for e in expenses %}
+    {
+      id: {{ e.id }},
+      description: {{ e.description|tojson }},
+      amount: {{ e.amount }},
+      category: {{ e.category|tojson }},
+      date: "{{ e.date.strftime('%Y-%m-%d') if e.date else '' }}"
+    },
+    {% endfor %}
+  ];
+
+  let currentCategoryLabels = {{ (cat_labels or []) | tojson }};
+  let currentCategoryValues = {{ (cat_values or []) | tojson }};
+  let currentDayLabels = {{ (day_labels or []) | tojson }};
+  let currentDayValues = {{ (day_values or []) | tojson }};
+
+  // State
+  let categoryChartType = (function() {
+    try { return localStorage.getItem('categoryChartType') || 'doughnut'; } catch(e) { return 'doughnut'; }
+  })();
+  let trendChartType = (function() {
+    try { return localStorage.getItem('trendChartType') || 'bar'; } catch(e) { return 'bar'; }
+  })();
+  let catChartInstance = null;
+  let dayChartInstance = null;
+
+  let currentSortBy = 'date';
+  let currentSortOrder = 'desc';
+  let currentPage = 1;
+  let pageSize = 10;
+  let activePreset = 'all';
+
+  const categoryBadges = {
+    'Food': { icon: '🍔', bg: 'bg-amber-500/10 text-amber-300 border-amber-500/20' },
+    'Transport': { icon: '🚗', bg: 'bg-blue-500/10 text-blue-300 border-blue-500/20' },
+    'Shopping': { icon: '🛍️', bg: 'bg-pink-500/10 text-pink-300 border-pink-500/20' },
+    'Bills': { icon: '📄', bg: 'bg-purple-500/10 text-purple-300 border-purple-500/20' },
+    'Health': { icon: '🩺', bg: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20' },
+    'Utilities': { icon: '💡', bg: 'bg-yellow-500/10 text-yellow-300 border-yellow-500/20' },
+    'Education': { icon: '🎓', bg: 'bg-cyan-500/10 text-cyan-300 border-cyan-500/20' },
+    'Other': { icon: '📦', bg: 'bg-slate-500/10 text-slate-300 border-slate-500/20' }
+  };
+
+  const chartColorPalette = [
+    '#38bdf8', '#f472b6', '#facc15', '#4ade80',
+    '#a78bfa', '#fb923c', '#f87171', '#34d399', '#60a5fa', '#e879f9'
+  ];
+
+  // Initialize on load
+  document.addEventListener('DOMContentLoaded', () => {
+    syncChartTypeButtons();
+    initCharts();
+    renderTable();
+    setupSearchInput();
+    updateExportLinks();
+
+    window.addEventListener('themeChanged', () => {
+      if (catChartInstance) catChartInstance.destroy();
+      if (dayChartInstance) dayChartInstance.destroy();
+      initCharts();
+    });
+  });
+
+  // Setup Search Input with live debouncing
+  function setupSearchInput() {
+    const input = document.getElementById('liveSearchInput');
+    const clearBtn = document.getElementById('clearSearchBtn');
+    let timer = null;
+
+    input.addEventListener('input', () => {
+      clearBtn.classList.toggle('hidden', !input.value);
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        currentPage = 1;
+        fetchDashboardData();
+      }, 250);
+    });
+  }
+
+  function clearSearch() {
+    const input = document.getElementById('liveSearchInput');
+    input.value = '';
+    document.getElementById('clearSearchBtn').classList.add('hidden');
+    currentPage = 1;
+    fetchDashboardData();
+  }
+
+  // Preset Date Ranges
+  function applyPreset(preset) {
+    activePreset = preset;
+    document.querySelectorAll('.preset-btn').forEach(btn => {
+      if (btn.dataset.preset === preset) {
+        btn.classList.add('bg-brand', 'text-slate-950', 'font-semibold');
+        btn.classList.remove('bg-slate-800', 'text-slate-300');
+      } else {
+        btn.classList.remove('bg-brand', 'text-slate-950', 'font-semibold');
+        btn.classList.add('bg-slate-800', 'text-slate-300');
+      }
+    });
+
+    const today = new Date();
+    const startInput = document.getElementById('startDateInput');
+    const endInput = document.getElementById('endDateInput');
+
+    const fmt = d => d.toISOString().split('T')[0];
+
+    if (preset === 'all') {
+      startInput.value = '';
+      endInput.value = '';
+    } else if (preset === 'today') {
+      startInput.value = fmt(today);
+      endInput.value = fmt(today);
+    } else if (preset === 'this_week') {
+      const d = new Date(today);
+      const day = d.getDay() || 7; // Monday start
+      d.setDate(d.getDate() - day + 1);
+      startInput.value = fmt(d);
+      endInput.value = fmt(today);
+    } else if (preset === 'this_month') {
+      const start = new Date(today.getFullYear(), today.getMonth(), 1);
+      startInput.value = fmt(start);
+      endInput.value = fmt(today);
+    } else if (preset === 'last_30') {
+      const d = new Date(today);
+      d.setDate(d.getDate() - 30);
+      startInput.value = fmt(d);
+      endInput.value = fmt(today);
+    } else if (preset === 'this_year') {
+      const start = new Date(today.getFullYear(), 0, 1);
+      startInput.value = fmt(start);
+      endInput.value = fmt(today);
+    }
+
+    currentPage = 1;
+    fetchDashboardData();
+  }
+
+  function onFilterChange() {
+    currentPage = 1;
+    fetchDashboardData();
+  }
+
+  function resetFilters() {
+    document.getElementById('liveSearchInput').value = '';
+    document.getElementById('clearSearchBtn').classList.add('hidden');
+    document.getElementById('categoryFilter').value = '';
+    document.getElementById('startDateInput').value = '';
+    document.getElementById('endDateInput').value = '';
+    applyPreset('all');
+  }
+
+  // Fetch updated dashboard state via AJAX API
+  async function fetchDashboardData() {
+    const search = document.getElementById('liveSearchInput').value.trim();
+    const category = document.getElementById('categoryFilter').value;
+    const start = document.getElementById('startDateInput').value;
+    const end = document.getElementById('endDateInput').value;
+
+    const params = new URLSearchParams();
+    if (search) params.set('search', search);
+    if (category) params.set('category', category);
+    if (start) params.set('start', start);
+    if (end) params.set('end', end);
+    if (currentSortBy) params.set('sort_by', currentSortBy);
+    if (currentSortOrder) params.set('order', currentSortOrder);
+
+    try {
+      const res = await fetch(`/api/expenses?${params.toString()}`);
+      if (!res.ok) throw new Error('Failed to load data');
+      const data = await res.json();
+
+      allExpenses = data.expenses || [];
+      currentCategoryLabels = data.cat_labels || [];
+      currentCategoryValues = data.cat_values || [];
+      currentDayLabels = data.day_labels || [];
+      currentDayValues = data.day_values || [];
+
+      updateKPIs(data);
+      updateCharts();
+      renderTable();
+      updateExportLinks();
+    } catch (err) {
+      console.error(err);
+      showToast('Could not refresh data: ' + err.message, 'error');
+    }
+  }
+
+  function updateKPIs(data) {
+    document.getElementById('kpiTotalSpend').textContent = formatCurrency(data.total);
+    document.getElementById('kpiExpenseCount').textContent = data.count;
+    document.getElementById('kpiTopCategory').textContent = data.top_category || 'None';
+    document.getElementById('kpiTopCategoryAmount').textContent = formatCurrency(data.top_category_amount || 0);
+    document.getElementById('kpiDailyAvg').textContent = formatCurrency(data.avg_per_day || 0);
+
+    // Budget card
+    if (data.budget) {
+      const b = data.budget;
+      document.getElementById('kpiBudgetSpent').textContent = formatCurrency(b.spent);
+      document.getElementById('kpiBudgetLimit').textContent = `/ ${formatCurrency(b.amount)}`;
+      document.getElementById('kpiBudgetPercent').textContent = `${b.percent}% used`;
+
+      const bar = document.getElementById('kpiBudgetBar');
+      bar.style.width = `${Math.min(b.percent, 100)}%`;
+      bar.className = 'h-full rounded-full transition-all duration-500 ' +
+        (b.status === 'exceeded' ? 'bg-rose-500' : b.status === 'warning' ? 'bg-amber-400' : 'bg-brand');
+
+      const remEl = document.getElementById('kpiBudgetRemaining');
+      if (b.remaining < 0) {
+        remEl.className = 'font-medium text-rose-400';
+        remEl.textContent = `Over ${formatCurrency(Math.abs(b.remaining))}`;
+      } else {
+        remEl.className = 'font-medium text-emerald-400';
+        remEl.textContent = `${formatCurrency(b.remaining)} left`;
+      }
+    }
+  }
+
+  function updateExportLinks() {
+    const search = document.getElementById('liveSearchInput').value.trim();
+    const category = document.getElementById('categoryFilter').value;
+    const start = document.getElementById('startDateInput').value;
+    const end = document.getElementById('endDateInput').value;
+
+    const params = new URLSearchParams();
+    if (start) params.set('start', start);
+    if (end) params.set('end', end);
+    if (category) params.set('category', category);
+
+    const qs = params.toString() ? '?' + params.toString() : '';
+    document.getElementById('exportCsvBtn').href = `/export.csv${qs}`;
+    document.getElementById('exportPdfBtn').href = `/export.pdf${qs}`;
+  }
+
+  // Sorting
+  function toggleSort(field) {
+    if (currentSortBy === field) {
+      currentSortOrder = currentSortOrder === 'asc' ? 'desc' : 'asc';
+    } else {
+      currentSortBy = field;
+      currentSortOrder = field === 'date' || field === 'amount' ? 'desc' : 'asc';
+    }
+
+    // Update table header icons
+    ['date', 'description', 'category', 'amount'].forEach(col => {
+      const icon = document.getElementById(`sortIcon-${col}`);
+      if (!icon) return;
+      if (col === currentSortBy) {
+        icon.textContent = currentSortOrder === 'asc' ? '▲' : '▼';
+        icon.classList.remove('opacity-40');
+        icon.classList.add('opacity-100', 'text-brand');
+      } else {
+        icon.textContent = '↕';
+        icon.classList.add('opacity-40');
+        icon.classList.remove('opacity-100', 'text-brand');
+      }
+    });
+
+    currentPage = 1;
+    fetchDashboardData();
+  }
+
+  // Pagination & Table Rendering
+  function onPageSizeChange() {
+    const val = document.getElementById('pageSizeSelect').value;
+    pageSize = val === 'all' ? allExpenses.length : parseInt(val, 10);
+    currentPage = 1;
+    renderTable();
+  }
+
+  function renderTable() {
+    const tbody = document.getElementById('expensesTableBody');
+    const empty = document.getElementById('tableEmptyState');
+    const countBadge = document.getElementById('tableRecordCountBadge');
+    const pagination = document.getElementById('tablePagination');
+
+    countBadge.textContent = `${allExpenses.length} items`;
+
+    if (allExpenses.length === 0) {
+      tbody.innerHTML = '';
+      empty.classList.remove('hidden');
+      pagination.classList.add('hidden');
+      return;
+    }
+
+    empty.classList.add('hidden');
+    pagination.classList.remove('hidden');
+
+    const totalPages = Math.ceil(allExpenses.length / pageSize) || 1;
+    if (currentPage > totalPages) currentPage = totalPages;
+
+    const startIdx = (currentPage - 1) * pageSize;
+    const endIdx = Math.min(startIdx + pageSize, allExpenses.length);
+    const pageItems = allExpenses.slice(startIdx, endIdx);
+
+    tbody.innerHTML = pageItems.map(e => {
+      const cat = categoryBadges[e.category] || { icon: '📦', bg: 'bg-slate-500/10 text-slate-300 border-slate-500/20' };
+      return `
+        <tr id="expense-row-${e.id}" class="transition-colors hover:bg-slate-800/40">
+          <td class="px-4 py-3 whitespace-nowrap text-slate-400 font-mono text-xs">${e.date || '—'}</td>
+          <td class="px-4 py-3 font-medium text-slate-100">${escapeHtml(e.description)}</td>
+          <td class="px-4 py-3">
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${cat.bg}">
+              <span>${cat.icon}</span>
+              <span>${escapeHtml(e.category)}</span>
+            </span>
+          </td>
+          <td class="px-4 py-3 text-right font-semibold text-slate-100 whitespace-nowrap">${formatCurrency(e.amount)}</td>
+          <td class="px-4 py-3 text-right whitespace-nowrap">
+            <div class="inline-flex items-center gap-1.5">
+              <button
+                type="button"
+                onclick="openEditModal(${e.id})"
+                class="px-2.5 py-1 rounded-lg text-xs text-sky-400 hover:text-sky-300 hover:bg-sky-500/10 border border-sky-500/30 transition-colors">
+                Edit
+              </button>
+              <button
+                type="button"
+                onclick="openDeleteModal(${e.id}, '${escapeQuotes(e.description)}')"
+                class="px-2.5 py-1 rounded-lg text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 border border-rose-500/30 transition-colors">
+                Delete
+              </button>
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+    // Update pagination info
+    document.getElementById('paginationInfo').textContent =
+      `Showing ${startIdx + 1} to ${endIdx} of ${allExpenses.length} entries`;
+
+    renderPaginationButtons(totalPages);
+  }
+
+  function renderPaginationButtons(totalPages) {
+    const container = document.getElementById('paginationButtons');
+    if (totalPages <= 1) {
+      container.innerHTML = '';
+      return;
+    }
+
+    let html = '';
+    html += `
+      <button
+        type="button"
+        ${currentPage === 1 ? 'disabled' : ''}
+        onclick="goToPage(${currentPage - 1})"
+        class="px-2 py-1 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 disabled:opacity-40 disabled:pointer-events-none transition-colors">
+        ‹
+      </button>
+    `;
+
+    for (let p = 1; p <= totalPages; p++) {
+      if (p === 1 || p === totalPages || (p >= currentPage - 1 && p <= currentPage + 1)) {
+        html += `
+          <button
+            type="button"
+            onclick="goToPage(${p})"
+            class="px-2.5 py-1 rounded-lg text-xs border transition-colors ${p === currentPage ? 'bg-brand text-slate-950 font-bold border-brand' : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'}">
+            ${p}
+          </button>
+        `;
+      } else if (p === currentPage - 2 || p === currentPage + 2) {
+        html += `<span class="px-1 text-slate-500">…</span>`;
+      }
+    }
+
+    html += `
+      <button
+        type="button"
+        ${currentPage === totalPages ? 'disabled' : ''}
+        onclick="goToPage(${currentPage + 1})"
+        class="px-2 py-1 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 disabled:opacity-40 disabled:pointer-events-none transition-colors">
+        ›
+      </button>
+    `;
+
+    container.innerHTML = html;
+  }
+
+  function goToPage(p) {
+    currentPage = p;
+    renderTable();
+  }
+
+  // ---------------- CHARTS LOGIC ----------------
+  function initCharts() {
+    renderCategoryChart();
+    renderTrendChart();
+  }
+
+  function renderCategoryChart() {
+    const catCanvas = document.getElementById('catChart');
+    if (!catCanvas) return;
+
+    if (catChartInstance) {
+      catChartInstance.destroy();
+      catChartInstance = null;
+    }
+
+    const isLight = document.documentElement.classList.contains('light');
+    const textColor = isLight ? '#334155' : '#cbd5e1';
+    const gridLineColor = isLight ? 'rgba(203, 213, 225, 0.7)' : 'rgba(51, 65, 85, 0.5)';
+
+    const catCtx = catCanvas.getContext('2d');
+    catChartInstance = new Chart(catCtx, {
+      type: categoryChartType,
+      data: {
+        labels: currentCategoryLabels,
+        datasets: [{
+          data: currentCategoryValues,
+          backgroundColor: currentCategoryLabels.map((_, i) => chartColorPalette[i % chartColorPalette.length]),
+          borderColor: isLight ? '#ffffff' : '#0f172a',
+          borderWidth: 2
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        onHover: (event, chartElement) => {
+          if (event.native && event.native.target) {
+            event.native.target.style.cursor = chartElement.length ? 'pointer' : 'default';
+          }
+        },
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: {
+              color: textColor,
+              boxWidth: 10,
+              padding: 12,
+              usePointStyle: true,
+              pointStyle: 'circle'
+            }
+          },
+          tooltip: {
+            callbacks: {
+              title: (items) => (items.length > 0 ? items[0].label : ''),
+              label: (ctx) => {
+                const val = typeof ctx.raw === 'number'
+                  ? ctx.raw
+                  : (ctx.parsed?.r !== undefined ? ctx.parsed.r : (Number(ctx.parsed) || 0));
+                const total = (ctx.dataset.data || []).reduce((a, b) => a + (Number(b) || 0), 0);
+                const pct = total > 0 ? ((val / total) * 100).toFixed(1) : '0';
+                return ` ${formatCurrency(val)} (${pct}%)`;
+              }
+            }
+          }
+        },
+        scales: categoryChartType === 'polarArea' ? {
+          r: {
+            grid: {
+              color: gridLineColor
+            },
+            angleLines: {
+              color: gridLineColor
+            },
+            ticks: {
+              display: false,
+              backdropColor: 'transparent'
+            },
+            pointLabels: {
+              display: false
+            },
+            suggestedMin: 0
+          }
+        } : {},
+        onClick: (evt, elements) => {
+          if (elements.length > 0) {
+            const index = elements[0].index;
+            const selectedCat = currentCategoryLabels[index];
+            if (selectedCat) {
+              const sel = document.getElementById('categoryFilter');
+              if (sel.value === selectedCat) {
+                sel.value = '';
+                onFilterChange();
+                showToast('Category filter cleared', 'info');
+              } else {
+                sel.value = selectedCat;
+                onFilterChange();
+                showToast(`Filtered by ${selectedCat}`, 'info');
+              }
+            }
+          }
+        }
+      }
+    });
+
+    checkCategoryChartEmpty();
+  }
+
+  function renderTrendChart() {
+    const dayCanvas = document.getElementById('dayChart');
+    if (!dayCanvas) return;
+
+    if (dayChartInstance) {
+      dayChartInstance.destroy();
+      dayChartInstance = null;
+    }
+
+    const isLight = document.documentElement.classList.contains('light');
+    const textColor = isLight ? '#334155' : '#cbd5e1';
+    const gridColor = isLight ? '#e2e8f0' : '#334155';
+    const isLine = trendChartType === 'line';
+
+    const dayCtx = dayCanvas.getContext('2d');
+    dayChartInstance = new Chart(dayCtx, {
+      type: trendChartType,
+      data: {
+        labels: currentDayLabels,
+        datasets: [{
+          label: 'Daily Total',
+          data: currentDayValues,
+          backgroundColor: isLine ? 'rgba(56, 189, 248, 0.2)' : 'rgba(56, 189, 248, 0.75)',
+          borderColor: '#38bdf8',
+          borderWidth: 2,
+          pointRadius: isLine ? 5 : 0,
+          pointHoverRadius: isLine ? 7 : 0,
+          pointBackgroundColor: '#38bdf8',
+          pointBorderColor: isLight ? '#ffffff' : '#0f172a',
+          pointBorderWidth: 2,
+          tension: 0.35,
+          fill: isLine
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => ` Total: ${formatCurrency(ctx.parsed.y)}`
+            }
+          }
+        },
+        scales: {
+          x: {
+            ticks: { color: textColor, maxRotation: 45 },
+            grid: { color: gridColor }
+          },
+          y: {
+            beginAtZero: true,
+            ticks: {
+              color: textColor,
+              callback: (val) => '₹' + val
+            },
+            grid: { color: gridColor }
+          }
+        }
+      }
+    });
+
+    checkTrendChartEmpty();
+  }
+
+  function updateCharts() {
+    renderCategoryChart();
+    renderTrendChart();
+  }
+
+  function checkCategoryChartEmpty() {
+    const catEmpty = document.getElementById('catChartEmpty');
+    const catCanvas = document.getElementById('catChart');
+    const hasCatData = currentCategoryValues && currentCategoryValues.some(v => v > 0);
+    if (catEmpty && catCanvas) {
+      if (hasCatData) {
+        catEmpty.classList.add('hidden');
+        catEmpty.classList.remove('flex');
+        catCanvas.classList.remove('invisible');
+      } else {
+        catEmpty.classList.remove('hidden');
+        catEmpty.classList.add('flex');
+        catCanvas.classList.add('invisible');
+      }
+    }
+  }
+
+  function checkTrendChartEmpty() {
+    const dayEmpty = document.getElementById('dayChartEmpty');
+    const dayCanvas = document.getElementById('dayChart');
+    const hasDayData = currentDayValues && currentDayValues.some(v => v > 0);
+    if (dayEmpty && dayCanvas) {
+      if (hasDayData) {
+        dayEmpty.classList.add('hidden');
+        dayEmpty.classList.remove('flex');
+        dayCanvas.classList.remove('invisible');
+      } else {
+        dayEmpty.classList.remove('hidden');
+        dayEmpty.classList.add('flex');
+        dayCanvas.classList.add('invisible');
+      }
+    }
+  }
+
+  function syncChartTypeButtons() {
+    document.querySelectorAll('.chart-type-btn').forEach(btn => {
+      const isActive = btn.dataset.chart === categoryChartType;
+      btn.classList.toggle('bg-brand', isActive);
+      btn.classList.toggle('text-slate-950', isActive);
+      btn.classList.toggle('font-medium', isActive);
+      btn.classList.toggle('text-slate-300', !isActive);
+    });
+    document.querySelectorAll('.trend-type-btn').forEach(btn => {
+      const isActive = btn.dataset.trend === trendChartType;
+      btn.classList.toggle('bg-brand', isActive);
+      btn.classList.toggle('text-slate-950', isActive);
+      btn.classList.toggle('font-medium', isActive);
+      btn.classList.toggle('text-slate-300', !isActive);
+    });
+  }
+
+  function setCategoryChartType(type) {
+    categoryChartType = type;
+    try { localStorage.setItem('categoryChartType', type); } catch (e) {}
+    syncChartTypeButtons();
+    renderCategoryChart();
+  }
+
+  function setTrendChartType(type) {
+    trendChartType = type;
+    try { localStorage.setItem('trendChartType', type); } catch (e) {}
+    syncChartTypeButtons();
+    renderTrendChart();
+  }
+
+  // ---------------- MODAL ACTIONS ----------------
+  function openAddModal() {
+    const modal = document.getElementById('addExpenseModal');
+    modal.classList.remove('hidden');
+    setTimeout(() => {
+      document.getElementById('addDescription').focus();
+    }, 100);
+  }
+
+  function closeAddModal() {
+    document.getElementById('addExpenseModal').classList.add('hidden');
+    document.getElementById('addExpenseForm').reset();
+  }
+
+  async function handleAddSubmit(e) {
+    e.preventDefault();
+    const btn = document.getElementById('addSubmitBtn');
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+
+    const desc = document.getElementById('addDescription').value.trim();
+    const amount = document.getElementById('addAmount').value.trim();
+    const category = document.getElementById('addCategory').value;
+    const date = document.getElementById('addDate').value;
+
+    try {
+      const res = await fetch('/api/expenses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ description: desc, amount, category, date })
+      });
+      const result = await res.json();
+
+      if (!res.ok || !result.success) {
+        throw new Error(result.message || 'Failed to add expense');
+      }
+
+      showToast(`Added "${desc}" (₹${parseFloat(amount).toFixed(2)})!`, 'success');
+      closeAddModal();
+      await fetchDashboardData();
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Save Expense';
+    }
+  }
+
+  // Edit modal
+  function openEditModal(id) {
+    const item = allExpenses.find(e => e.id === id);
+    if (!item) return;
+
+    document.getElementById('editExpenseId').value = item.id;
+    document.getElementById('editDescription').value = item.description;
+    document.getElementById('editAmount').value = item.amount;
+    document.getElementById('editCategory').value = item.category;
+    document.getElementById('editDate').value = item.date;
+
+    document.getElementById('editExpenseModal').classList.remove('hidden');
+    setTimeout(() => document.getElementById('editDescription').focus(), 100);
+  }
+
+  function closeEditModal() {
+    document.getElementById('editExpenseModal').classList.add('hidden');
+  }
+
+  async function handleEditSubmit(e) {
+    e.preventDefault();
+    const id = document.getElementById('editExpenseId').value;
+    const desc = document.getElementById('editDescription').value.trim();
+    const amount = document.getElementById('editAmount').value.trim();
+    const category = document.getElementById('editCategory').value;
+    const date = document.getElementById('editDate').value;
+
+    const btn = document.getElementById('editSubmitBtn');
+    btn.disabled = true;
+    btn.textContent = 'Updating...';
+
+    try {
+      const res = await fetch(`/api/expenses/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ description: desc, amount, category, date })
+      });
+      const result = await res.json();
+
+      if (!res.ok || !result.success) {
+        throw new Error(result.message || 'Failed to update expense');
+      }
+
+      showToast(`Updated "${desc}" successfully!`, 'success');
+      closeEditModal();
+      await fetchDashboardData();
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Update Expense';
+    }
+  }
+
+  // Delete modal
+  let pendingDeleteId = null;
+
+  function openDeleteModal(id, desc) {
+    pendingDeleteId = id;
+    document.getElementById('deleteModalDesc').textContent = `Are you sure you want to delete "${desc}"?`;
+    document.getElementById('deleteConfirmModal').classList.remove('hidden');
+
+    document.getElementById('confirmDeleteBtn').onclick = () => confirmDelete(id);
+  }
+
+  function closeDeleteModal() {
+    pendingDeleteId = null;
+    document.getElementById('deleteConfirmModal').classList.add('hidden');
+  }
+
+  async function confirmDelete(id) {
+    closeDeleteModal();
+    const row = document.getElementById(`expense-row-${id}`);
+    if (row) {
+      row.classList.add('opacity-40', 'line-through');
+    }
+
+    try {
+      const res = await fetch(`/api/expenses/${id}`, {
+        method: 'DELETE',
+        headers: { 'Accept': 'application/json' }
+      });
+      const result = await res.json();
+
+      if (!res.ok || !result.success) {
+        throw new Error(result.message || 'Failed to delete expense');
+      }
+
+      showToast('Expense removed', 'info');
+      await fetchDashboardData();
+    } catch (err) {
+      if (row) row.classList.remove('opacity-40', 'line-through');
+      showToast(err.message, 'error');
+    }
+  }
+
+  // Helpers
+  function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/[&<>"']/g, m => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
+    })[m]);
+  }
+
+  function escapeQuotes(str) {
+    if (!str) return '';
+    return str.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+  }
+</script>
+{% endblock %}

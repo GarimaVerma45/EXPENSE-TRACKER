@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{% block title %}Expense Tracker Lite{% endblock %}</title>
+
+    <!-- Tailwind CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: { extend: { colors: { brand: { DEFAULT: "#38bdf8" } } } },
+      };
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Light mode override (Tailwind is class-based dark-by-default here; toggling adds .light to <html>) -->
+    <style>
+      html.light body { background-color: #f8fafc; color: #0f172a; }
+      html.light .bg-slate-900 { background-color: #ffffff !important; }
+      html.light .bg-slate-900\/60 { background-color: rgba(255,255,255,0.85) !important; }
+      html.light .bg-slate-800 { background-color: #f1f5f9 !important; }
+      html.light .bg-slate-800\/50 { background-color: #f1f5f9 !important; }
+      html.light .bg-slate-800\/30 { background-color: #f1f5f9 !important; }
+      html.light .border-slate-800 { border-color: #e2e8f0 !important; }
+      html.light .border-slate-700 { border-color: #e2e8f0 !important; }
+      html.light .text-slate-100 { color: #0f172a !important; }
+      html.light .text-slate-300 { color: #334155 !important; }
+      html.light .text-slate-400 { color: #64748b !important; }
+      html.light .text-slate-500 { color: #94a3b8 !important; }
+      html.light .hover\:bg-slate-700:hover { background-color: #e2e8f0 !important; }
+      html.light .hover\:bg-slate-800\/30:hover { background-color: #f1f5f9 !important; }
+      html.light .hover\:text-brand:hover { color: #0284c7 !important; }
+    </style>
+    <script>
+       // apply saved theme before paint to avoid a flash of the wrong theme
+      (function () {
+        if (localStorage.getItem('theme') === 'light') {
+          document.documentElement.classList.add('light');
+        }
+      })();
+    </script>
+
+    {% block head_extra %}{% endblock %}
+  </head>
+  <body class="h-full bg-slate-900 text-slate-100">
+    <header class="border-b border-slate-800 bg-slate-900/60 backdrop-blur">
+      <div class="mx-auto max-w-6xl px-4 py-4 flex flex-wrap items-center justify-between gap-3">
+        <div class="flex flex-wrap items-center gap-6">
+        <a href="{{ url_for('index') if current_user.is_authenticated else url_for('login') }}" class="text-xl font-bold tracking-tight">
+          <span class="text-brand">Expense</span> Tracker
+          <span class="text-slate-400">Lite</span>
+        </a>
+        
+        {% if current_user.is_authenticated %}
+        <nav class="flex flex-wrap items-center gap-1 text-sm">
+          <a href="{{ url_for('index') }}" class="rounded-lg px-3 py-1.5 transition-colors {% if request.endpoint == 'index' %}bg-slate-800 text-brand font-medium border border-brand/20{% else %}text-slate-300 hover:bg-slate-800 hover:text-white{% endif %}">Dashboard</a>
+          <a href="{{ url_for('budget') }}" class="rounded-lg px-3 py-1.5 transition-colors {% if request.endpoint == 'budget' %}bg-slate-800 text-brand font-medium border border-brand/20{% else %}text-slate-300 hover:bg-slate-800 hover:text-white{% endif %}">Budget</a>
+          <a href="{{ url_for('recurring') }}" class="rounded-lg px-3 py-1.5 transition-colors {% if request.endpoint == 'recurring' %}bg-slate-800 text-brand font-medium border border-brand/20{% else %}text-slate-300 hover:bg-slate-800 hover:text-white{% endif %}">Recurring</a>
+          <a href="{{ url_for('savings') }}" class="rounded-lg px-3 py-1.5 transition-colors {% if request.endpoint == 'savings' %}bg-slate-800 text-brand font-medium border border-brand/20{% else %}text-slate-300 hover:bg-slate-800 hover:text-white{% endif %}">Savings</a>
+          <a href="{{ url_for('profile') }}" class="rounded-lg px-3 py-1.5 transition-colors {% if request.endpoint == 'profile' %}bg-slate-800 text-brand font-medium border border-brand/20{% else %}text-slate-300 hover:bg-slate-800 hover:text-white{% endif %}">Profile</a>
+        </nav>
+        {% endif %}
+        </div>
+        {% if request.endpoint not in ['login', 'signup', 'forgot_password', 'reset_password'] %}
+
+        <div class="flex items-center gap-3 text-sm">
+          <button
+            type="button"
+            onclick="openShortcutsModal()"
+            title="Keyboard shortcuts (?)"
+            class="hidden md:flex rounded-xl bg-slate-800 hover:bg-slate-700 px-2.5 py-1.5 text-xs text-slate-300 border border-slate-700 items-center gap-1.5 transition-all">
+            <span>⌨️</span>
+            <span class="text-[11px] font-mono text-slate-400 bg-slate-900 px-1 py-0.5 rounded">?</span>
+          </button>
+
+          <button
+            type="button"
+            onclick="toggleTheme()"
+            title="Toggle dark / light mode"
+            class="rounded-xl bg-slate-800 hover:bg-slate-700 w-9 h-9 flex items-center justify-center border border-slate-700 transition-colors">
+            <span id="themeIcon">🌙</span>
+          </button>
+
+          {% if current_user.is_authenticated %}
+            <span class="text-slate-400 hidden sm:inline">Hi, {{ current_user.username }}</span>
+            <a href="{{ url_for('logout') }}"
+               class="rounded-xl bg-slate-800 hover:bg-slate-700 px-3 py-1.5 border border-slate-700 transition-colors">
+              Logout
+            </a>
+          {% else %}
+            <a href="{{ url_for('login') }}"
+               class="rounded-xl bg-slate-800 hover:bg-slate-700 px-3 py-1.5 border border-slate-700 transition-colors">
+              Login
+            </a>
+            <a href="{{ url_for('signup') }}"
+               class="rounded-xl bg-brand/20 hover:bg-brand/30 text-brand px-3 py-1.5 border border-brand/30 transition-colors">
+              Sign Up
+            </a>
+          {% endif %}
+        </div>
+        {% endif %}
+      </div>
+    </header>
+
+    <!-- Floating Toast Notification Container -->
+    <div id="toastContainer" class="fixed top-5 right-5 z-[9999] flex flex-col gap-2.5 max-w-sm pointer-events-none"></div>
+
+    <!-- Keyboard Shortcuts Modal -->
+    <div id="shortcutsModal" class="fixed inset-0 z-50 hidden bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl relative animate-in fade-in zoom-in duration-200">
+        <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-800">
+          <h3 class="text-lg font-bold flex items-center gap-2">
+            <span>⌨️</span> Keyboard Shortcuts
+          </h3>
+          <button type="button" onclick="closeShortcutsModal()" class="text-slate-400 hover:text-white text-xl leading-none">&times;</button>
+        </div>
+        <div class="space-y-3 text-sm">
+          <div class="flex items-center justify-between py-1.5 border-b border-slate-800/50">
+            <span class="text-slate-300">Open Add Expense Modal</span>
+            <kbd class="px-2 py-1 bg-slate-800 text-brand font-mono text-xs rounded border border-slate-700">N</kbd>
+          </div>
+          <div class="flex items-center justify-between py-1.5 border-b border-slate-800/50">
+            <span class="text-slate-300">Focus Quick Search</span>
+            <kbd class="px-2 py-1 bg-slate-800 text-brand font-mono text-xs rounded border border-slate-700">/</kbd>
+          </div>
+          <div class="flex items-center justify-between py-1.5 border-b border-slate-800/50">
+            <span class="text-slate-300">Close Active Modal / Clear</span>
+            <kbd class="px-2 py-1 bg-slate-800 text-slate-300 font-mono text-xs rounded border border-slate-700">Esc</kbd>
+          </div>
+          <div class="flex items-center justify-between py-1.5">
+            <span class="text-slate-300">Open Shortcuts Helper</span>
+            <kbd class="px-2 py-1 bg-slate-800 text-slate-300 font-mono text-xs rounded border border-slate-700">?</kbd>
+          </div>
+        </div>
+        <div class="mt-6 text-center">
+          <button type="button" onclick="closeShortcutsModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs rounded-xl border border-slate-700">
+            Got it
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <main class="mx-auto max-w-6xl px-4 py-8">
+      <!-- Flash messages -->
+      {% with messages = get_flashed_messages(with_categories=true) %} {% if
+      messages %}
+      <div class="space-y-2 mb-4" id="flashMessageContainer">
+        {% for category, message in messages %}
+        <div
+          class="rounded-xl px-4 py-3 text-sm flex items-center justify-between {% if category == 'success' %} bg-emerald-500/10 text-emerald-300 border border-emerald-400/20 {% elif category == 'error' %} bg-rose-500/10 text-rose-300 border border-rose-400/20 {% else %} bg-slate-800 text-slate-200 border border-slate-700 {% endif %}"
+        >
+          <span>{{ message }}</span>
+          <button type="button" onclick="this.parentElement.remove()" class="text-slate-400 hover:text-white text-base">&times;</button>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %} {% endwith %} {% block content %}{% endblock %}
+    </main>
+
+    <footer class="mx-auto max-w-6xl px-4 pb-8 flex flex-wrap items-center justify-between text-xs text-slate-500">
+      <span>Built with Flask & Tailwind</span>
+      <div class="flex items-center gap-3">
+        <button type="button" onclick="openShortcutsModal()" class="hover:text-brand transition-colors">Keyboard Shortcuts (?)</button>
+        <span>·</span>
+        <span>Expense Tracker Lite</span>
+      </div>
+    </footer>
+
+    <script>
+      function toggleTheme() {
+        const html = document.documentElement;
+        html.classList.toggle('light');
+        const isLight = html.classList.contains('light');
+        localStorage.setItem('theme', isLight ? 'light' : 'dark');
+        const icon = document.getElementById('themeIcon');
+        if (icon) icon.textContent = isLight ? '☀️' : '🌙';
+        window.dispatchEvent(new CustomEvent('themeChanged', { detail: { isLight } }));
+      }
+
+      function showToast(message, type = 'success') {
+        const container = document.getElementById('toastContainer');
+        if (!container) return;
+        const toast = document.createElement('div');
+        const isSuccess = type === 'success';
+        const isError = type === 'error';
+        const bgClasses = isSuccess ? 'bg-emerald-600 text-white shadow-emerald-500/20 border-emerald-500' 
+                        : isError ? 'bg-rose-600 text-white shadow-rose-500/20 border-rose-500' 
+                        : 'bg-slate-800 text-slate-100 shadow-slate-900/40 border-slate-700';
+        const icon = isSuccess ? '✓' : isError ? '✕' : 'ℹ';
+        toast.className = `pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-2xl shadow-xl border text-sm font-medium transition-all duration-300 transform translate-y-2 opacity-0 ${bgClasses}`;
+        toast.innerHTML = `
+          <span class="flex items-center justify-center w-5 h-5 rounded-full bg-white/20 text-xs font-bold">${icon}</span>
+          <span class="flex-1">${message}</span>
+          <button type="button" class="text-white/70 hover:text-white text-lg leading-none">&times;</button>
+        `;
+        toast.querySelector('button').onclick = () => {
+          toast.classList.add('opacity-0', 'scale-95');
+          setTimeout(() => toast.remove(), 200);
+        };
+        container.appendChild(toast);
+        requestAnimationFrame(() => {
+          toast.classList.remove('translate-y-2', 'opacity-0');
+        });
+        setTimeout(() => {
+          if (toast.parentElement) {
+            toast.classList.add('opacity-0', 'scale-95');
+            setTimeout(() => toast.remove(), 250);
+          }
+        }, 3500);
+      }
+
+      function formatCurrency(amount) {
+        const num = parseFloat(amount) || 0;
+        return '₹' + num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      }
+
+      function openShortcutsModal() {
+        const modal = document.getElementById('shortcutsModal');
+        if (modal) modal.classList.remove('hidden');
+      }
+
+      function closeShortcutsModal() {
+        const modal = document.getElementById('shortcutsModal');
+        if (modal) modal.classList.add('hidden');
+      }
+
+      // Keyboard shortcuts
+      document.addEventListener('keydown', function (e) {
+        const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
+        const isInputFocused = activeTag === 'input' || activeTag === 'textarea' || activeTag === 'select';
+
+        if (e.key === 'Escape') {
+          closeShortcutsModal();
+          const modals = document.querySelectorAll('.app-modal:not(.hidden)');
+          modals.forEach(m => m.classList.add('hidden'));
+        } else if (!isInputFocused) {
+          if (e.key === '?' || (e.shiftKey && e.key === '/')) {
+            e.preventDefault();
+            openShortcutsModal();
+          } else if (e.key === 'n' || e.key === 'N') {
+            const addBtn = document.getElementById('openAddExpenseModalBtn');
+            if (addBtn) {
+              e.preventDefault();
+              addBtn.click();
+            }
+          } else if (e.key === '/') {
+            const searchInput = document.getElementById('liveSearchInput');
+            if (searchInput) {
+              e.preventDefault();
+              searchInput.focus();
+            }
+          }
+        }
+      });
+
+      document.addEventListener('DOMContentLoaded', function () {
+        const icon = document.getElementById('themeIcon');
+        if (icon) icon.textContent = document.documentElement.classList.contains('light') ? '☀️' : '🌙';
+      });
+    </script>
+
+    {% block body_end %}{% endblock %}
+  </body>
+</html>
