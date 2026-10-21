@@ -3,5 +3,5 @@ Flask-SQLAlchemy
 Flask-Login
 Werkzeug
 reportlab
-
-itdangerous
+itsdangerous
+gunicorn

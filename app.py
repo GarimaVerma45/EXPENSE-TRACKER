@@ -1,3 +1,4 @@
+import os
 from flask import Flask, render_template, request, url_for, make_response, flash, redirect, Response, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import (
@@ -23,7 +24,7 @@ app = Flask(__name__)
 
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///expenses.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SECRET_KEY'] = 'my-secret-key'
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'my-secret-key')
 db = SQLAlchemy(app)
 
 # ---------- Flask-Login setup ----------
@@ -1226,5 +1227,7 @@ def profile():
 
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    port = int(os.environ.get('PORT', 5000))
+    debug_mode = os.environ.get('FLASK_DEBUG', 'False').lower() in ('true', '1', 't')
+    app.run(host='0.0.0.0', port=port, debug=debug_mode)
  
